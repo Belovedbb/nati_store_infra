@@ -1,0 +1,21 @@
+{
+  "name": "nati-store-infra",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.11.1",
+  "scripts": {
+    "diff": "node --import tsx src/cli.ts diff",
+    "deploy": "node --import tsx src/cli.ts deploy",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-cloudformation": "3.1131.0",
+    "@aws-sdk/client-secrets-manager": "3.1131.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.1",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3"
+  }
+}

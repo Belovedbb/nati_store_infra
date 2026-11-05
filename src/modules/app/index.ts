@@ -1,5 +1,5 @@
 import type { EnvironmentConfig } from "../../config/types.js"
-import { remote } from "../../host.js"
+import { base64, remote } from "../../host.js"
 import type { AppSecrets } from "../../secrets.js"
 import { runHostStack } from "../host-stack.js"
 
@@ -21,6 +21,7 @@ export async function runApp(
   const jwt = secrets.jwtSecret
   const cookie = secrets.cookieSecret
   const publishableKey = secrets.medusaPublishableKey
+  const registryLogin = ghcrLoginScript([backendImage, storefrontImage], secrets)
   const databaseUrl = `postgres://nati_store:${encodeURIComponent(password)}@postgres:5432/nati_store`
   const backendEnv = [
     "NODE_ENV=production",
@@ -110,7 +111,7 @@ export async function runApp(
       - path: ./backend.env
         format: raw
     entrypoint: ["/bin/sh", "-lc"]
-    command: "cd /server/apps/backend && pnpm medusa db:migrate"
+    command: ["cd /server/apps/backend && pnpm medusa db:migrate"]
     networks: [nati]
 volumes:
   caddy_data:
@@ -131,9 +132,22 @@ networks:
     files: { "compose.yaml": compose, "backend.env": backendEnv,
       "storefront.env": storefrontEnv, Caddyfile: caddyfile },
     containers: ["nati-backend", "nati-storefront", "nati-proxy"],
-    beforeUp: `docker compose -p nati-app -f compose.yaml stop proxy storefront backend >/dev/null 2>&1 || true
-docker compose -p nati-app -f compose.yaml --profile migrate run --rm migrate`,
+    beforeUp: `${registryLogin}docker compose -p nati-app -f compose.yaml stop proxy storefront backend >/dev/null 2>&1 || true
+docker compose -p nati-app -f compose.yaml --profile migrate run --rm -T migrate </dev/null`,
   })
+}
+
+// Logs the server in to ghcr.io so it can pull private images. The token travels
+// over SSH stdin (never argv) and is piped to docker via --password-stdin.
+function ghcrLoginScript(images: string[], secrets: AppSecrets): string {
+  if (!images.some((image) => image.startsWith("ghcr.io/"))) return ""
+  const { ghcrToken, ghcrUsername } = secrets
+  if (!ghcrToken || !ghcrUsername) {
+    console.log("app: ghcrToken/ghcrUsername not set in the secret; pulling ghcr.io images without login (public images only)")
+    return ""
+  }
+  if (!/^[A-Za-z0-9][A-Za-z0-9-]*$/.test(ghcrUsername)) throw new Error("ghcrUsername must be a valid GitHub username")
+  return `printf '%s' '${base64(ghcrToken)}' | base64 -d | docker login ghcr.io -u ${ghcrUsername} --password-stdin >/dev/null\n`
 }
 
 function validDomain(value: string): boolean {

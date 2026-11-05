@@ -9,6 +9,10 @@ export interface AppSecrets extends DatabaseSecrets {
   jwtSecret: string
   cookieSecret: string
   medusaPublishableKey: string
+  /** Optional. A GitHub token with read:packages, used to pull private ghcr.io images. */
+  ghcrToken?: string
+  /** Optional. GitHub username that owns ghcrToken. */
+  ghcrUsername?: string
 }
 
 export async function loadSecrets(config: EnvironmentConfig, includeApp: true): Promise<AppSecrets>
@@ -25,7 +29,15 @@ export async function loadSecrets(config: EnvironmentConfig, includeApp: boolean
       throw new Error(`Secret ${config.aws.secretId} must contain a JSON object`)
     }
     const fields = value as Record<string, unknown>
-    const required = (name: keyof AppSecrets): string => {
+    const optional = (name: "ghcrToken" | "ghcrUsername"): string | undefined => {
+      const field = fields[name]
+      if (field === undefined || field === "") return undefined
+      if (typeof field !== "string" || /[\r\n]/.test(field)) {
+        throw new Error(`Secret ${config.aws.secretId} field ${name} must be a single-line string`)
+      }
+      return field
+    }
+    const required = (name: "postgresPassword" | "jwtSecret" | "cookieSecret" | "medusaPublishableKey"): string => {
       const field = fields[name]
       if (typeof field !== "string" || !field || /[\r\n]/.test(field)) {
         throw new Error(`Secret ${config.aws.secretId} needs a nonempty single-line ${name}`)
@@ -35,7 +47,8 @@ export async function loadSecrets(config: EnvironmentConfig, includeApp: boolean
     const database = { postgresPassword: required("postgresPassword") }
     if (!includeApp) return database
     return { ...database, jwtSecret: required("jwtSecret"), cookieSecret: required("cookieSecret"),
-      medusaPublishableKey: required("medusaPublishableKey") }
+      medusaPublishableKey: required("medusaPublishableKey"),
+      ghcrToken: optional("ghcrToken"), ghcrUsername: optional("ghcrUsername") }
   } finally {
     client.destroy()
   }

@@ -24,7 +24,7 @@ export const dev = {
     proxyImage: "caddy:2-alpine",
     backendImage: "",
     storefrontImage: "",
-    storeDomain: "",
-    apiDomain: "",
+    storeDomain: "nati-store.duckdns.org",
+    apiDomain: "nati-store-admin.duckdns.org",
   },
 } satisfies EnvironmentConfig
